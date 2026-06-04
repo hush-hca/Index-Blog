@@ -33,10 +33,9 @@ type TranslatedPost = {
   anchorText: string;
 };
 
-// [수정 팩트] 대시보드 Custom Secret 명칭과 100% 일치하도록 변경
 const supabaseUrl = Deno.env.get("NEXT_PUBLIC_SUPABASE_URL");
 const supabaseServiceRoleKey = Deno.env.get("SB_SERVICE_ROLE_KEY");
-const libreTranslateUrl = Deno.env.get("LIBRETRANSLATE_URL") ?? "https://translate.fedilab.app";
+const libreTranslateUrl = Deno.env.get("LIBRETRANSLATE_URL") ?? "https://libretranslate.com";
 const libreTranslateApiKey = Deno.env.get("LIBRETRANSLATE_API_KEY");
 
 if (!supabaseUrl || !supabaseServiceRoleKey) {
@@ -54,7 +53,7 @@ serve(async (req) => {
 
   try {
     const blogs = await getActiveBlogs();
-    const results = [];
+    const results: Awaited<ReturnType<typeof processBlog>>[] = [];
 
     for (const blog of blogs) {
       const blogResult = await processBlog(blog);
@@ -74,7 +73,7 @@ serve(async (req) => {
         ok: false,
         error: error instanceof Error ? error.message : "Unknown error",
       },
-      { status: 500 }
+      500,
     );
   }
 });
@@ -190,7 +189,7 @@ async function insertDetectedPostIfNew(
       post_title: rssPost.title,
     })
     .select("id, post_url, post_title")
-    .maybeSingle(); // single() 대신 수집 중복 에러 유연화 처리
+    .single();
 
   if (!error) {
     return data;
@@ -205,7 +204,9 @@ async function insertDetectedPostIfNew(
 
 function extractCleanTextFromHtml(html: string): string {
   const $ = cheerio.load(html);
+
   $("script, style, noscript, iframe").remove();
+
   return normalizeText($("body").text() || $.text());
 }
 
@@ -227,7 +228,7 @@ async function translateNaverPostToSpanish(input: {
 
 async function translateLongTextToSpanish(text: string) {
   const chunks = chunkText(text, 3500);
-  const translatedChunks = [];
+  const translatedChunks: string[] = [];
 
   for (const chunk of chunks) {
     translatedChunks.push(await translateTextToSpanish(chunk));
@@ -452,13 +453,11 @@ function escapeHtml(value: string) {
     .replaceAll("'", "&#039;");
 }
 
-function jsonResponse(body: unknown, init?: ResponseInit | number) {
-  const settings = typeof init === "number" ? { status: init } : init;
+function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
-    status: settings?.status ?? 200,
+    status,
     headers: {
       "Content-Type": "application/json",
-      ...(settings?.headers || {}),
     },
   });
 }
