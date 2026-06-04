@@ -3,6 +3,6 @@
   "/(auth)/login/page": "/login",
   "/(auth)/signup/page": "/signup",
   "/page": "/",
-  "/dashboard/register/page": "/dashboard/register",
-  "/dashboard/page": "/dashboard"
+  "/dashboard/page": "/dashboard",
+  "/dashboard/register/page": "/dashboard/register"
 }
