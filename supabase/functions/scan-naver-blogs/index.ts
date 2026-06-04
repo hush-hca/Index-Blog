@@ -33,14 +33,15 @@ type TranslatedPost = {
   anchorText: string;
 };
 
-const supabaseUrl = Deno.env.get("SUPABASE_URL");
-const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-const libreTranslateUrl = Deno.env.get("LIBRETRANSLATE_URL") ?? "https://libretranslate.com";
+// [수정 팩트] 대시보드 Custom Secret 명칭과 100% 일치하도록 변경
+const supabaseUrl = Deno.env.get("NEXT_PUBLIC_SUPABASE_URL");
+const supabaseServiceRoleKey = Deno.env.get("SB_SERVICE_ROLE_KEY");
+const libreTranslateUrl = Deno.env.get("LIBRETRANSLATE_URL") ?? "https://translate.fedilab.app";
 const libreTranslateApiKey = Deno.env.get("LIBRETRANSLATE_API_KEY");
 
 if (!supabaseUrl || !supabaseServiceRoleKey) {
   throw new Error(
-    "Missing required environment variables: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY",
+    "Missing required environment variables: NEXT_PUBLIC_SUPABASE_URL, SB_SERVICE_ROLE_KEY",
   );
 }
 
@@ -73,7 +74,7 @@ serve(async (req) => {
         ok: false,
         error: error instanceof Error ? error.message : "Unknown error",
       },
-      500,
+      { status: 500 }
     );
   }
 });
@@ -189,7 +190,7 @@ async function insertDetectedPostIfNew(
       post_title: rssPost.title,
     })
     .select("id, post_url, post_title")
-    .single();
+    .maybeSingle(); // single() 대신 수집 중복 에러 유연화 처리
 
   if (!error) {
     return data;
@@ -204,9 +205,7 @@ async function insertDetectedPostIfNew(
 
 function extractCleanTextFromHtml(html: string): string {
   const $ = cheerio.load(html);
-
   $("script, style, noscript, iframe").remove();
-
   return normalizeText($("body").text() || $.text());
 }
 
@@ -453,11 +452,13 @@ function escapeHtml(value: string) {
     .replaceAll("'", "&#039;");
 }
 
-function jsonResponse(body: unknown, status = 200) {
+function jsonResponse(body: unknown, init?: ResponseInit | number) {
+  const settings = typeof init === "number" ? { status: init } : init;
   return new Response(JSON.stringify(body), {
-    status,
+    status: settings?.status ?? 200,
     headers: {
       "Content-Type": "application/json",
+      ...(settings?.headers || {}),
     },
   });
 }
