@@ -35,7 +35,6 @@ export async function submitNaverPost(formData: FormData): Promise<SubmitPostRes
   const { data, error } = await supabase.functions.invoke("scan-naver-blogs", {
     body: {
       post_url: normalizedUrl,
-      user_id: user.id,
     },
   });
 

@@ -1,0 +1,4 @@
+project_id = "REPLACE_WITH_SUPABASE_PROJECT_REF"
+
+[functions.scan-naver-blogs]
+verify_jwt = true

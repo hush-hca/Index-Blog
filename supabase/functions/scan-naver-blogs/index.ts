@@ -53,17 +53,18 @@ if (!supabaseUrl || !supabaseServiceRoleKey) {
 const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
 
 serve(async (req) => {
-  if (req.method !== "POST" && req.method !== "GET") {
+  if (req.method !== "POST") {
     return jsonResponse({ error: "Method not allowed" }, 405);
   }
 
   try {
-    const body = req.method === "POST" ? await req.json().catch(() => null) : null;
+    const body = await req.json().catch(() => null);
 
     if (body?.post_url) {
+      const userId = await getAuthenticatedUserId(req);
       const result = await processSubmittedPost({
         postUrl: String(body.post_url),
-        userId: typeof body.user_id === "string" ? body.user_id : null,
+        userId,
       });
 
       return jsonResponse({
@@ -73,19 +74,7 @@ serve(async (req) => {
       });
     }
 
-    const blogs = await getActiveBlogs();
-    const results: Awaited<ReturnType<typeof processBlog>>[] = [];
-
-    for (const blog of blogs) {
-      const blogResult = await processBlog(blog);
-      results.push(blogResult);
-    }
-
-    return jsonResponse({
-      ok: true,
-      scannedBlogs: blogs.length,
-      results,
-    });
+    return jsonResponse({ ok: false, error: "post_url is required" }, 400);
   } catch (error) {
     console.error(error);
 
@@ -99,11 +88,27 @@ serve(async (req) => {
   }
 });
 
-async function processSubmittedPost(input: { postUrl: string; userId: string | null }) {
-  if (!input.userId) {
-    throw new Error("Missing user_id for submitted post");
+async function getAuthenticatedUserId(req: Request) {
+  const authorization = req.headers.get("Authorization");
+  const token = authorization?.replace(/^Bearer\s+/i, "");
+
+  if (!token) {
+    throw new Error("Missing Authorization bearer token");
   }
 
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser(token);
+
+  if (error || !user) {
+    throw new Error("Invalid authenticated user");
+  }
+
+  return user.id;
+}
+
+async function processSubmittedPost(input: { postUrl: string; userId: string }) {
   const postParts = extractNaverPostParts(input.postUrl);
   const blog = await findOrCreateRegisteredBlog({
     userId: input.userId,
