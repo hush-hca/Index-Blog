@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Naver Backlink Dashboard",
-  description: "Register Naver Blogs and monitor WordPress backlink activity.",
+  title: "Naver Post Dashboard",
+  description: "Submit Naver Blog posts and monitor processing activity.",
 };
 
 export default function RootLayout({

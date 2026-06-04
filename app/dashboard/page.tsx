@@ -1,9 +1,8 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
-type BacklinkActivityRow = {
+type ProcessingActivityRow = {
   id: string;
   status: string;
-  wp_post_url: string | null;
   inserted_at: string;
   detected_posts: {
     post_title: string | null;
@@ -22,7 +21,6 @@ export default async function DashboardPage() {
       `
       id,
       status,
-      wp_post_url,
       inserted_at,
       detected_posts!inner(
         post_title,
@@ -34,14 +32,14 @@ export default async function DashboardPage() {
     .order("inserted_at", { ascending: false })
     .limit(50);
 
-  const rows = (data ?? []) as unknown as BacklinkActivityRow[];
+  const rows = (data ?? []) as unknown as ProcessingActivityRow[];
 
   return (
     <section>
       <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-slate-950">Recent Backlink Activity</h1>
+        <h1 className="text-2xl font-semibold text-slate-950">Recent Processing Activity</h1>
         <p className="mt-1 text-sm text-slate-600">
-          Latest WordPress backlink posts generated from your registered Naver Blogs.
+          Latest processing activity from your submitted Naver Blog posts.
         </p>
       </div>
 
@@ -51,21 +49,20 @@ export default async function DashboardPage() {
             <tr>
               <th className="px-4 py-3 font-medium">Title</th>
               <th className="px-4 py-3 font-medium">Status</th>
-              <th className="px-4 py-3 font-medium">WordPress Post</th>
               <th className="px-4 py-3 font-medium">Inserted</th>
             </tr>
           </thead>
           <tbody>
             {error ? (
               <tr>
-                <td colSpan={4} className="px-4 py-6 text-red-600">
+                <td colSpan={3} className="px-4 py-6 text-red-600">
                   {error.message}
                 </td>
               </tr>
             ) : rows.length === 0 ? (
               <tr>
-                <td colSpan={4} className="px-4 py-6 text-slate-600">
-                  No backlink activity yet.
+                <td colSpan={3} className="px-4 py-6 text-slate-600">
+                  No activity yet.
                 </td>
               </tr>
             ) : (
@@ -76,22 +73,8 @@ export default async function DashboardPage() {
                   </td>
                   <td className="px-4 py-3">
                     <span className="rounded bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700">
-                      {row.status}
+                      {formatStatus(row.status)}
                     </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    {row.wp_post_url ? (
-                      <a
-                        className="text-slate-950 underline"
-                        href={row.wp_post_url}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        Open
-                      </a>
-                    ) : (
-                      <span className="text-slate-500">-</span>
-                    )}
                   </td>
                   <td className="px-4 py-3 text-slate-600">
                     {new Intl.DateTimeFormat("en", {
@@ -107,4 +90,8 @@ export default async function DashboardPage() {
       </div>
     </section>
   );
+}
+
+function formatStatus(status: string) {
+  return status === "SUCCESS" ? "Completed" : "Failed";
 }

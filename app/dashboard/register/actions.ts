@@ -2,11 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { extractBlogId } from "@/lib/naver/extractBlogId";
+import { submitNaverPost } from "@/app/actions";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 
-export async function registerBlog(formData: FormData) {
-  const blogUrl = String(formData.get("blog_url") ?? "");
+export async function registerPost(formData: FormData) {
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },
@@ -16,24 +15,10 @@ export async function registerBlog(formData: FormData) {
     redirect("/login");
   }
 
-  let blogId: string;
+  const result = await submitNaverPost(formData);
 
-  try {
-    blogId = extractBlogId(blogUrl);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Invalid blog URL";
-    redirect(`/dashboard/register?error=${encodeURIComponent(message)}`);
-  }
-
-  const normalizedUrl = `https://blog.naver.com/${blogId}`;
-  const { error } = await supabase.from("registered_blogs").insert({
-    user_id: user.id,
-    blog_url: normalizedUrl,
-    blog_id: blogId,
-  });
-
-  if (error) {
-    redirect(`/dashboard/register?error=${encodeURIComponent(error.message)}`);
+  if (!result.ok) {
+    redirect(`/dashboard/register?error=${encodeURIComponent(result.error ?? "Submission failed")}`);
   }
 
   revalidatePath("/dashboard");

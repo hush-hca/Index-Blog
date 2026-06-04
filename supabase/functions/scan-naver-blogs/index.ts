@@ -27,6 +27,12 @@ type RssPost = {
   descriptionHtml: string;
 };
 
+type NaverPostParts = {
+  blogId: string;
+  logNo: string;
+  normalizedUrl: string;
+};
+
 type TranslatedPost = {
   title: string;
   summaryHtml: string;
@@ -52,6 +58,21 @@ serve(async (req) => {
   }
 
   try {
+    const body = req.method === "POST" ? await req.json().catch(() => null) : null;
+
+    if (body?.post_url) {
+      const result = await processSubmittedPost({
+        postUrl: String(body.post_url),
+        userId: typeof body.user_id === "string" ? body.user_id : null,
+      });
+
+      return jsonResponse({
+        ok: true,
+        mode: "single_post",
+        result,
+      });
+    }
+
     const blogs = await getActiveBlogs();
     const results: Awaited<ReturnType<typeof processBlog>>[] = [];
 
@@ -77,6 +98,43 @@ serve(async (req) => {
     );
   }
 });
+
+async function processSubmittedPost(input: { postUrl: string; userId: string | null }) {
+  if (!input.userId) {
+    throw new Error("Missing user_id for submitted post");
+  }
+
+  const postParts = extractNaverPostParts(input.postUrl);
+  const blog = await findOrCreateRegisteredBlog({
+    userId: input.userId,
+    blogId: postParts.blogId,
+  });
+  const rssPosts = await fetchNaverRssPosts(postParts.blogId);
+  const rssPost = rssPosts.find((post) => {
+    const candidate = extractNaverPostParts(post.link);
+    return candidate.blogId === postParts.blogId && candidate.logNo === postParts.logNo;
+  });
+
+  if (!rssPost) {
+    throw new Error("Submitted post was not found in the Naver Blog RSS feed");
+  }
+
+  const detectedPost = await insertDetectedPostIfNew(blog.id, rssPost);
+
+  if (!detectedPost) {
+    return {
+      postUrl: postParts.normalizedUrl,
+      status: "ALREADY_PROCESSED",
+    };
+  }
+
+  await processDetectedPost(detectedPost, rssPost);
+
+  return {
+    postUrl: postParts.normalizedUrl,
+    status: "SUCCESS",
+  };
+}
 
 async function getActiveBlogs(): Promise<RegisteredBlog[]> {
   const { data, error } = await supabase
@@ -112,27 +170,7 @@ async function processBlog(blog: RegisteredBlog) {
     result.newPosts += 1;
 
     try {
-      const cleanText = extractCleanTextFromHtml(rssPost.descriptionHtml);
-      const translatedPost = await translateNaverPostToSpanish({
-        koreanTitle: rssPost.title,
-        koreanContent: cleanText,
-        originalUrl: rssPost.link,
-      });
-      const wordpressSite = await claimNextWordpressSite();
-      const wpPostUrl = await publishWordpressPost({
-        wordpressSite,
-        translatedPost,
-        originalUrl: rssPost.link,
-      });
-
-      await logBacklink({
-        postId: detectedPost.id,
-        wpSiteUrl: wordpressSite.site_url,
-        wpPostUrl,
-        status: "SUCCESS",
-      });
-
-      await markBacklinkInserted(detectedPost.id);
+      await processDetectedPost(detectedPost, rssPost);
       result.backlinksInserted += 1;
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
@@ -148,6 +186,67 @@ async function processBlog(blog: RegisteredBlog) {
   }
 
   return result;
+}
+
+async function processDetectedPost(detectedPost: DetectedPost, rssPost: RssPost) {
+  const cleanText = extractCleanTextFromHtml(rssPost.descriptionHtml);
+  const translatedPost = await translateNaverPostToSpanish({
+    koreanTitle: rssPost.title,
+    koreanContent: cleanText,
+    originalUrl: rssPost.link,
+  });
+  const wordpressSite = await claimNextWordpressSite();
+  const wpPostUrl = await publishWordpressPost({
+    wordpressSite,
+    translatedPost,
+    originalUrl: rssPost.link,
+  });
+
+  await logBacklink({
+    postId: detectedPost.id,
+    wpSiteUrl: wordpressSite.site_url,
+    wpPostUrl,
+    status: "SUCCESS",
+  });
+
+  await markBacklinkInserted(detectedPost.id);
+}
+
+async function findOrCreateRegisteredBlog(input: {
+  userId: string;
+  blogId: string;
+}): Promise<RegisteredBlog> {
+  const { data: existing, error: selectError } = await supabase
+    .from("registered_blogs")
+    .select("id, blog_url, blog_id")
+    .eq("user_id", input.userId)
+    .eq("blog_id", input.blogId)
+    .eq("is_active", true)
+    .maybeSingle();
+
+  if (selectError) {
+    throw new Error(`Failed to find registered blog: ${selectError.message}`);
+  }
+
+  if (existing) {
+    return existing;
+  }
+
+  const { data, error } = await supabase
+    .from("registered_blogs")
+    .insert({
+      user_id: input.userId,
+      blog_url: `https://blog.naver.com/${input.blogId}`,
+      blog_id: input.blogId,
+    })
+    .select("id, blog_url, blog_id")
+    .single();
+
+  if (error) {
+    throw new Error(`Failed to register blog for submitted post: ${error.message}`);
+  }
+
+  return data;
 }
 
 async function fetchNaverRssPosts(blogId: string): Promise<RssPost[]> {
@@ -208,6 +307,34 @@ function extractCleanTextFromHtml(html: string): string {
   $("script, style, noscript, iframe").remove();
 
   return normalizeText($("body").text() || $.text());
+}
+
+function extractNaverPostParts(input: string): NaverPostParts {
+  const cleaned = input.trim().replace(/\/+$/, "");
+
+  try {
+    const url = new URL(cleaned);
+
+    if (url.hostname !== "blog.naver.com") {
+      throw new Error("Invalid Naver Blog URL");
+    }
+
+    const pathParts = url.pathname.split("/").filter(Boolean);
+    const blogId = url.searchParams.get("blogId") ?? pathParts[0];
+    const logNo = url.searchParams.get("logNo") ?? pathParts[1];
+
+    if (!blogId || !logNo) {
+      throw new Error("Naver Blog post ID not found");
+    }
+
+    return {
+      blogId,
+      logNo,
+      normalizedUrl: `https://blog.naver.com/${blogId}/${logNo}`,
+    };
+  } catch {
+    throw new Error("Invalid Naver Blog post URL");
+  }
 }
 
 async function translateNaverPostToSpanish(input: {
