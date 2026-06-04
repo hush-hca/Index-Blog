@@ -1,7 +1,6 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 import * as cheerio from "npm:cheerio@1.0.0";
-import OpenAI from "npm:openai@4.67.3";
 
 type RegisteredBlog = {
   id: string;
@@ -36,16 +35,16 @@ type TranslatedPost = {
 
 const supabaseUrl = Deno.env.get("SUPABASE_URL");
 const supabaseServiceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-const openAiApiKey = Deno.env.get("OPENAI_API_KEY");
+const libreTranslateUrl = Deno.env.get("LIBRETRANSLATE_URL") ?? "https://libretranslate.com";
+const libreTranslateApiKey = Deno.env.get("LIBRETRANSLATE_API_KEY");
 
-if (!supabaseUrl || !supabaseServiceRoleKey || !openAiApiKey) {
+if (!supabaseUrl || !supabaseServiceRoleKey) {
   throw new Error(
-    "Missing required environment variables: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, OPENAI_API_KEY",
+    "Missing required environment variables: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY",
   );
 }
 
 const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
-const openai = new OpenAI({ apiKey: openAiApiKey });
 
 serve(async (req) => {
   if (req.method !== "POST" && req.method !== "GET") {
@@ -114,7 +113,7 @@ async function processBlog(blog: RegisteredBlog) {
 
     try {
       const cleanText = extractCleanTextFromHtml(rssPost.descriptionHtml);
-      const translatedPost = await translateNaverPostToEnglish({
+      const translatedPost = await translateNaverPostToSpanish({
         koreanTitle: rssPost.title,
         koreanContent: cleanText,
         originalUrl: rssPost.link,
@@ -211,55 +210,119 @@ function extractCleanTextFromHtml(html: string): string {
   return normalizeText($("body").text() || $.text());
 }
 
-async function translateNaverPostToEnglish(input: {
+async function translateNaverPostToSpanish(input: {
   koreanTitle: string;
   koreanContent: string;
   originalUrl: string;
 }): Promise<TranslatedPost> {
-  const response = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
-    response_format: { type: "json_object" },
-    messages: [
-      {
-        role: "system",
-        content:
-          "You translate Korean Naver Blog posts into natural English WordPress posts. Return only valid JSON.",
-      },
-      {
-        role: "user",
-        content: [
-          "Translate and summarize this Naver Blog post in English.",
-          "",
-          "Requirements:",
-          "- Create a natural English WordPress post title.",
-          "- Create a concise English HTML summary with 2 to 4 paragraphs.",
-          "- Create one natural English anchor text phrase for linking back to the original Naver post.",
-          "- Do not invent facts, claims, prices, names, or dates.",
-          "- Return JSON with exactly these keys: title, summaryHtml, anchorText.",
-          "",
-          `Original URL: ${input.originalUrl}`,
-          "",
-          `Korean title: ${input.koreanTitle}`,
-          "",
-          `Korean content: ${input.koreanContent.slice(0, 12000)}`,
-        ].join("\n"),
-      },
-    ],
+  const title = await translateTextToSpanish(input.koreanTitle);
+  const translatedContent = await translateLongTextToSpanish(input.koreanContent.slice(0, 10000));
+  const paragraphs = buildSpanishParagraphs(translatedContent);
+
+  return {
+    title,
+    summaryHtml: paragraphs.map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`).join("\n"),
+    anchorText: "leer la publicacion original en Naver Blog",
+  };
+}
+
+async function translateLongTextToSpanish(text: string) {
+  const chunks = chunkText(text, 3500);
+  const translatedChunks = [];
+
+  for (const chunk of chunks) {
+    translatedChunks.push(await translateTextToSpanish(chunk));
+  }
+
+  return translatedChunks.join("\n\n");
+}
+
+async function translateTextToSpanish(text: string) {
+  const endpoint = new URL("/translate", normalizeSiteUrl(libreTranslateUrl));
+  const body: Record<string, string> = {
+    q: text,
+    source: "ko",
+    target: "es",
+    format: "text",
+  };
+
+  if (libreTranslateApiKey) {
+    body.api_key = libreTranslateApiKey;
+  }
+
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(body),
   });
 
-  const content = response.choices[0]?.message?.content;
+  const data = await response.json().catch(() => null);
 
-  if (!content) {
-    throw new Error("OpenAI returned an empty translation response");
+  if (!response.ok) {
+    throw new Error(
+      `Spanish translation failed: ${response.status} ${
+        data ? JSON.stringify(data) : response.statusText
+      }`,
+    );
   }
 
-  const parsed = JSON.parse(content) as TranslatedPost;
-
-  if (!parsed.title || !parsed.summaryHtml || !parsed.anchorText) {
-    throw new Error("OpenAI translation response is missing required fields");
+  if (!data?.translatedText) {
+    throw new Error("Spanish translation response did not include translatedText");
   }
 
-  return parsed;
+  return normalizeText(String(data.translatedText));
+}
+
+function chunkText(text: string, maxLength: number) {
+  const paragraphs = text
+    .split(/\n+|(?<=[.!?])\s+/)
+    .map((part) => normalizeText(part))
+    .filter(Boolean);
+  const chunks: string[] = [];
+  let current = "";
+
+  for (const paragraph of paragraphs) {
+    if (!current) {
+      current = paragraph;
+      continue;
+    }
+
+    if (`${current}\n\n${paragraph}`.length > maxLength) {
+      chunks.push(current);
+      current = paragraph;
+      continue;
+    }
+
+    current = `${current}\n\n${paragraph}`;
+  }
+
+  if (current) {
+    chunks.push(current);
+  }
+
+  return chunks.length > 0 ? chunks : [text.slice(0, maxLength)];
+}
+
+function buildSpanishParagraphs(translatedContent: string) {
+  const sentences = translatedContent
+    .split(/(?<=[.!?])\s+/)
+    .map((sentence) => normalizeText(sentence))
+    .filter(Boolean);
+
+  if (sentences.length === 0) {
+    return ["Resumen no disponible."];
+  }
+
+  const selected = sentences.slice(0, 8);
+  const paragraphs: string[] = [];
+
+  for (let index = 0; index < selected.length; index += 2) {
+    paragraphs.push(selected.slice(index, index + 2).join(" "));
+  }
+
+  return paragraphs.slice(0, 4);
 }
 
 async function claimNextWordpressSite(): Promise<WordpressSite> {
@@ -328,7 +391,7 @@ function buildWordpressContent(input: {
   return [
     sanitizeSummaryHtml(input.summaryHtml),
     "",
-    `<p>Read the original Naver Blog post here: <a href="${escapeHtml(input.originalUrl)}" rel="dofollow">${escapeHtml(input.anchorText)}</a></p>`,
+    `<p>Lee la publicacion original de Naver Blog aqui: <a href="${escapeHtml(input.originalUrl)}" rel="dofollow">${escapeHtml(input.anchorText)}</a></p>`,
   ].join("\n").trim();
 }
 
