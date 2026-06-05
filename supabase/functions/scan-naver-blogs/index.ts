@@ -480,11 +480,43 @@ async function publishWordpressPost(input: {
     );
   }
 
-  if (!body?.link) {
-    throw new Error("WordPress response did not include a post link");
+  const postUrl = extractWordpressPostUrl(body, input.wordpressSite.site_url);
+
+  if (!postUrl) {
+    throw new Error(
+      `WordPress response did not include a usable post URL: ${JSON.stringify(body)}`,
+    );
   }
 
-  return body.link;
+  return postUrl;
+}
+
+function extractWordpressPostUrl(body: unknown, siteUrl: string) {
+  if (!body || typeof body !== "object") {
+    return null;
+  }
+
+  const post = body as {
+    id?: number;
+    link?: string;
+    guid?: {
+      rendered?: string;
+    };
+  };
+
+  if (post.link) {
+    return post.link;
+  }
+
+  if (post.guid?.rendered) {
+    return post.guid.rendered;
+  }
+
+  if (post.id) {
+    return new URL(`/?p=${post.id}`, normalizeSiteUrl(siteUrl)).toString();
+  }
+
+  return null;
 }
 
 function buildWordpressContent(input: {
