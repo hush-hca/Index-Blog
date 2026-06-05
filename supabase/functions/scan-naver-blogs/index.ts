@@ -39,14 +39,21 @@ type TranslatedPost = {
   anchorText: string;
 };
 
+type GoogleTranslateResponse = {
+  data?: {
+    translations?: Array<{
+      translatedText?: string;
+    }>;
+  };
+};
+
 const supabaseUrl = Deno.env.get("NEXT_PUBLIC_SUPABASE_URL");
 const supabaseServiceRoleKey = Deno.env.get("SB_SERVICE_ROLE_KEY");
-const libreTranslateUrl = Deno.env.get("LIBRETRANSLATE_URL") ?? "https://libretranslate.com";
-const libreTranslateApiKey = Deno.env.get("LIBRETRANSLATE_API_KEY");
+const googleTranslateApiKey = Deno.env.get("GOOGLE_TRANSLATE_API_KEY");
 
-if (!supabaseUrl || !supabaseServiceRoleKey) {
+if (!supabaseUrl || !supabaseServiceRoleKey || !googleTranslateApiKey) {
   throw new Error(
-    "Missing required environment variables: NEXT_PUBLIC_SUPABASE_URL, SB_SERVICE_ROLE_KEY",
+    "Missing required environment variables: NEXT_PUBLIC_SUPABASE_URL, SB_SERVICE_ROLE_KEY, GOOGLE_TRANSLATE_API_KEY",
   );
 }
 
@@ -194,7 +201,7 @@ async function processBlog(blog: RegisteredBlog) {
 }
 
 async function processDetectedPost(detectedPost: DetectedPost, rssPost: RssPost) {
-  const cleanText = extractCleanTextFromHtml(rssPost.descriptionHtml);
+  const cleanText = truncatePlainText(extractCleanTextFromHtml(rssPost.descriptionHtml), 2000);
   const translatedPost = await translateNaverPostToSpanish({
     koreanTitle: rssPost.title,
     koreanContent: cleanText,
@@ -347,8 +354,10 @@ async function translateNaverPostToSpanish(input: {
   koreanContent: string;
   originalUrl: string;
 }): Promise<TranslatedPost> {
-  const title = await translateTextToSpanish(input.koreanTitle);
-  const translatedContent = await translateLongTextToSpanish(input.koreanContent.slice(0, 10000));
+  const [title, translatedContent] = await translateTextsToSpanish([
+    input.koreanTitle,
+    input.koreanContent,
+  ]);
   const paragraphs = buildSpanishParagraphs(translatedContent);
 
   return {
@@ -358,83 +367,46 @@ async function translateNaverPostToSpanish(input: {
   };
 }
 
-async function translateLongTextToSpanish(text: string) {
-  const chunks = chunkText(text, 3500);
-  const translatedChunks: string[] = [];
-
-  for (const chunk of chunks) {
-    translatedChunks.push(await translateTextToSpanish(chunk));
-  }
-
-  return translatedChunks.join("\n\n");
-}
-
-async function translateTextToSpanish(text: string) {
-  const endpoint = new URL("/translate", normalizeSiteUrl(libreTranslateUrl));
-  const body: Record<string, string> = {
-    q: text,
-    source: "ko",
-    target: "es",
-    format: "text",
-  };
-
-  if (libreTranslateApiKey) {
-    body.api_key = libreTranslateApiKey;
-  }
+async function translateTextsToSpanish(texts: string[]) {
+  const endpoint = new URL("https://translation.googleapis.com/language/translate/v2");
+  endpoint.searchParams.set("key", googleTranslateApiKey);
 
   const response = await fetch(endpoint, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
-    body: JSON.stringify(body),
+    body: JSON.stringify({
+      q: texts,
+      source: "ko",
+      target: "es",
+      format: "text",
+    }),
   });
 
-  const data = await response.json().catch(() => null);
+  const data = (await response.json().catch(() => null)) as GoogleTranslateResponse | null;
 
   if (!response.ok) {
     throw new Error(
-      `Spanish translation failed: ${response.status} ${
+      `Google Translation API failed: ${response.status} ${
         data ? JSON.stringify(data) : response.statusText
       }`,
     );
   }
 
-  if (!data?.translatedText) {
-    throw new Error("Spanish translation response did not include translatedText");
+  const translations = data?.data?.translations;
+
+  if (!Array.isArray(translations) || translations.length !== texts.length) {
+    throw new Error("Google Translation API response did not include all translations");
   }
 
-  return normalizeText(String(data.translatedText));
+  return translations.map((translation: { translatedText?: string }) =>
+    normalizeText(String(translation.translatedText ?? ""))
+  );
 }
 
-function chunkText(text: string, maxLength: number) {
-  const paragraphs = text
-    .split(/\n+|(?<=[.!?])\s+/)
-    .map((part) => normalizeText(part))
-    .filter(Boolean);
-  const chunks: string[] = [];
-  let current = "";
-
-  for (const paragraph of paragraphs) {
-    if (!current) {
-      current = paragraph;
-      continue;
-    }
-
-    if (`${current}\n\n${paragraph}`.length > maxLength) {
-      chunks.push(current);
-      current = paragraph;
-      continue;
-    }
-
-    current = `${current}\n\n${paragraph}`;
-  }
-
-  if (current) {
-    chunks.push(current);
-  }
-
-  return chunks.length > 0 ? chunks : [text.slice(0, maxLength)];
+function truncatePlainText(text: string, maxLength: number) {
+  return text.length > maxLength ? text.slice(0, maxLength) : text;
 }
 
 function buildSpanishParagraphs(translatedContent: string) {
@@ -521,7 +493,7 @@ function buildWordpressContent(input: {
   originalUrl: string;
 }) {
   return [
-    sanitizeSummaryHtml(input.summaryHtml),
+    input.summaryHtml,
     "",
     `<p>Lee la publicacion original de Naver Blog aqui: <a href="${escapeHtml(input.originalUrl)}" rel="dofollow">${escapeHtml(input.anchorText)}</a></p>`,
   ].join("\n").trim();
@@ -563,17 +535,6 @@ function normalizeSiteUrl(siteUrl: string) {
 
 function normalizeText(value: string) {
   return value.replace(/\s+/g, " ").trim();
-}
-
-function sanitizeSummaryHtml(html: string) {
-  const $ = cheerio.load(html);
-
-  $("script, style, iframe, object, embed, form").remove();
-  $("a").each((_, element) => {
-    $(element).removeAttr("href").removeAttr("target").removeAttr("rel");
-  });
-
-  return $("body").html()?.trim() || $.html().trim();
 }
 
 function escapeHtml(value: string) {
