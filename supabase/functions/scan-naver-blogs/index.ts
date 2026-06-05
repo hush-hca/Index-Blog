@@ -1,6 +1,5 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
-import * as cheerio from "npm:cheerio@1.0.0";
 
 type RegisteredBlog = {
   id: string;
@@ -47,17 +46,7 @@ type GoogleTranslateResponse = {
   };
 };
 
-const supabaseUrl = Deno.env.get("NEXT_PUBLIC_SUPABASE_URL");
-const supabaseServiceRoleKey = Deno.env.get("SB_SERVICE_ROLE_KEY");
-const googleTranslateApiKey = Deno.env.get("GOOGLE_TRANSLATE_API_KEY");
-
-if (!supabaseUrl || !supabaseServiceRoleKey || !googleTranslateApiKey) {
-  throw new Error(
-    "Missing required environment variables: NEXT_PUBLIC_SUPABASE_URL, SB_SERVICE_ROLE_KEY, GOOGLE_TRANSLATE_API_KEY",
-  );
-}
-
-const supabase = createClient(supabaseUrl, supabaseServiceRoleKey);
+let supabaseClient: ReturnType<typeof createClient> | null = null;
 
 serve(async (req) => {
   if (req.method !== "POST") {
@@ -95,6 +84,27 @@ serve(async (req) => {
   }
 });
 
+function getEnv(name: string) {
+  const value = Deno.env.get(name);
+
+  if (!value) {
+    throw new Error(`Missing required environment variable: ${name}`);
+  }
+
+  return value;
+}
+
+function getSupabase() {
+  if (!supabaseClient) {
+    supabaseClient = createClient(
+      getEnv("NEXT_PUBLIC_SUPABASE_URL"),
+      getEnv("SB_SERVICE_ROLE_KEY"),
+    );
+  }
+
+  return supabaseClient;
+}
+
 async function getAuthenticatedUserId(req: Request) {
   const authorization = req.headers.get("Authorization");
   const token = authorization?.replace(/^Bearer\s+/i, "");
@@ -106,7 +116,7 @@ async function getAuthenticatedUserId(req: Request) {
   const {
     data: { user },
     error,
-  } = await supabase.auth.getUser(token);
+  } = await getSupabase().auth.getUser(token);
 
   if (error || !user) {
     throw new Error("Invalid authenticated user");
@@ -149,7 +159,7 @@ async function processSubmittedPost(input: { postUrl: string; userId: string }) 
 }
 
 async function getActiveBlogs(): Promise<RegisteredBlog[]> {
-  const { data, error } = await supabase
+  const { data, error } = await getSupabase()
     .from("registered_blogs")
     .select("id, blog_url, blog_id")
     .eq("is_active", true);
@@ -228,7 +238,7 @@ async function findOrCreateRegisteredBlog(input: {
   userId: string;
   blogId: string;
 }): Promise<RegisteredBlog> {
-  const { data: existing, error: selectError } = await supabase
+  const { data: existing, error: selectError } = await getSupabase()
     .from("registered_blogs")
     .select("id, blog_url, blog_id")
     .eq("user_id", input.userId)
@@ -244,7 +254,7 @@ async function findOrCreateRegisteredBlog(input: {
     return existing;
   }
 
-  const { data, error } = await supabase
+  const { data, error } = await getSupabase()
     .from("registered_blogs")
     .insert({
       user_id: input.userId,
@@ -272,13 +282,13 @@ async function fetchNaverRssPosts(blogId: string): Promise<RssPost[]> {
   }
 
   const xml = await response.text();
-  const $ = cheerio.load(xml, { xmlMode: true });
+  const document = new DOMParser().parseFromString(xml, "application/xml");
   const posts: RssPost[] = [];
 
-  $("item").each((_, item) => {
-    const title = normalizeText($(item).find("title").first().text());
-    const link = normalizeText($(item).find("link").first().text());
-    const descriptionHtml = $(item).find("description").first().text();
+  document.querySelectorAll("item").forEach((item) => {
+    const title = normalizeText(item.querySelector("title")?.textContent ?? "");
+    const link = normalizeText(item.querySelector("link")?.textContent ?? "");
+    const descriptionHtml = item.querySelector("description")?.textContent ?? "";
 
     if (title && link && descriptionHtml) {
       posts.push({ title, link, descriptionHtml });
@@ -292,7 +302,7 @@ async function insertDetectedPostIfNew(
   blogId: string,
   rssPost: RssPost,
 ): Promise<DetectedPost | null> {
-  const { data, error } = await supabase
+  const { data, error } = await getSupabase()
     .from("detected_posts")
     .insert({
       blog_id: blogId,
@@ -314,11 +324,11 @@ async function insertDetectedPostIfNew(
 }
 
 function extractCleanTextFromHtml(html: string): string {
-  const $ = cheerio.load(html);
+  const document = new DOMParser().parseFromString(html, "text/html");
 
-  $("script, style, noscript, iframe").remove();
+  document.querySelectorAll("script, style, noscript, iframe").forEach((node) => node.remove());
 
-  return normalizeText($("body").text() || $.text());
+  return normalizeText(document.body?.textContent ?? document.documentElement?.textContent ?? "");
 }
 
 function extractNaverPostParts(input: string): NaverPostParts {
@@ -369,7 +379,7 @@ async function translateNaverPostToSpanish(input: {
 
 async function translateTextsToSpanish(texts: string[]) {
   const endpoint = new URL("https://translation.googleapis.com/language/translate/v2");
-  endpoint.searchParams.set("key", googleTranslateApiKey);
+  endpoint.searchParams.set("key", getEnv("GOOGLE_TRANSLATE_API_KEY"));
 
   const response = await fetch(endpoint, {
     method: "POST",
@@ -430,7 +440,7 @@ function buildSpanishParagraphs(translatedContent: string) {
 }
 
 async function claimNextWordpressSite(): Promise<WordpressSite> {
-  const { data, error } = await supabase.rpc("claim_next_wordpress_site");
+  const { data, error } = await getSupabase().rpc("claim_next_wordpress_site");
 
   if (error) {
     throw new Error(`Failed to claim WordPress site: ${error.message}`);
@@ -537,7 +547,7 @@ async function logBacklink(input: {
   wpPostUrl: string;
   status: string;
 }) {
-  const { error } = await supabase.from("backlink_logs").insert({
+  const { error } = await getSupabase().from("backlink_logs").insert({
     post_id: input.postId,
     wp_site_url: input.wpSiteUrl,
     wp_post_url: input.wpPostUrl,
@@ -550,7 +560,7 @@ async function logBacklink(input: {
 }
 
 async function markBacklinkInserted(postId: string) {
-  const { error } = await supabase
+  const { error } = await getSupabase()
     .from("detected_posts")
     .update({ backlink_inserted: true })
     .eq("id", postId);
