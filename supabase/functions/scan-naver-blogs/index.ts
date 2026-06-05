@@ -294,18 +294,17 @@ async function fetchNaverRssPosts(blogId: string): Promise<RssPost[]> {
   }
 
   const xml = await response.text();
-  const document = new DOMParser().parseFromString(xml, "application/xml");
   const posts: RssPost[] = [];
 
-  document.querySelectorAll("item").forEach((item) => {
-    const title = normalizeText(item.querySelector("title")?.textContent ?? "");
-    const link = normalizeText(item.querySelector("link")?.textContent ?? "");
-    const descriptionHtml = item.querySelector("description")?.textContent ?? "";
+  for (const itemXml of extractXmlBlocks(xml, "item")) {
+    const title = normalizeText(decodeHtmlEntities(extractXmlTagText(itemXml, "title")));
+    const link = normalizeText(decodeHtmlEntities(extractXmlTagText(itemXml, "link")));
+    const descriptionHtml = decodeHtmlEntities(extractXmlTagText(itemXml, "description"));
 
     if (title && link && descriptionHtml) {
       posts.push({ title, link, descriptionHtml });
     }
-  });
+  }
 
   return posts;
 }
@@ -351,11 +350,48 @@ async function getRetryableDetectedPost(postUrl: string): Promise<DetectedPost |
 }
 
 function extractCleanTextFromHtml(html: string): string {
-  const document = new DOMParser().parseFromString(html, "text/html");
+  return normalizeText(
+    decodeHtmlEntities(
+      html
+        .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, " ")
+        .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, " ")
+        .replace(/<noscript\b[^>]*>[\s\S]*?<\/noscript>/gi, " ")
+        .replace(/<iframe\b[^>]*>[\s\S]*?<\/iframe>/gi, " ")
+        .replace(/<[^>]+>/g, " "),
+    ),
+  );
+}
 
-  document.querySelectorAll("script, style, noscript, iframe").forEach((node) => node.remove());
+function extractXmlBlocks(xml: string, tagName: string) {
+  const escapedTagName = escapeRegExp(tagName);
+  const pattern = new RegExp(`<${escapedTagName}\\b[^>]*>([\\s\\S]*?)<\\/${escapedTagName}>`, "gi");
+  const blocks: string[] = [];
+  let match: RegExpExecArray | null;
 
-  return normalizeText(document.body?.textContent ?? document.documentElement?.textContent ?? "");
+  while ((match = pattern.exec(xml)) !== null) {
+    blocks.push(match[1] ?? "");
+  }
+
+  return blocks;
+}
+
+function extractXmlTagText(xml: string, tagName: string) {
+  const escapedTagName = escapeRegExp(tagName);
+  const pattern = new RegExp(`<${escapedTagName}\\b[^>]*>([\\s\\S]*?)<\\/${escapedTagName}>`, "i");
+  const match = pattern.exec(xml);
+
+  if (!match?.[1]) {
+    return "";
+  }
+
+  return match[1]
+    .replace(/^<!\[CDATA\[/, "")
+    .replace(/\]\]>$/, "")
+    .trim();
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 function extractNaverPostParts(input: string): NaverPostParts {
@@ -604,6 +640,31 @@ function normalizeSiteUrl(siteUrl: string) {
 
 function normalizeText(value: string) {
   return value.replace(/\s+/g, " ").trim();
+}
+
+function decodeHtmlEntities(value: string) {
+  const namedEntities: Record<string, string> = {
+    amp: "&",
+    lt: "<",
+    gt: ">",
+    quot: '"',
+    apos: "'",
+    nbsp: " ",
+  };
+
+  return value.replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, (_, entity: string) => {
+    const normalized = entity.toLowerCase();
+
+    if (normalized.startsWith("#x")) {
+      return String.fromCodePoint(Number.parseInt(normalized.slice(2), 16));
+    }
+
+    if (normalized.startsWith("#")) {
+      return String.fromCodePoint(Number.parseInt(normalized.slice(1), 10));
+    }
+
+    return namedEntities[normalized] ?? `&${entity};`;
+  });
 }
 
 function escapeHtml(value: string) {
