@@ -39,11 +39,17 @@ export async function submitNaverPost(formData: FormData): Promise<SubmitPostRes
   });
 
   if (error) {
-    return { ok: false, error: "Unable to process this post right now." };
+    return { ok: false, error: error.message };
   }
 
   if (data && typeof data === "object" && "ok" in data && !data.ok) {
-    return { ok: false, error: "Unable to process this post right now." };
+    return {
+      ok: false,
+      error:
+        "error" in data && typeof data.error === "string"
+          ? data.error
+          : "Unable to process this post right now.",
+    };
   }
 
   revalidatePath("/dashboard");

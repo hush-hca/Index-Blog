@@ -144,6 +144,18 @@ async function processSubmittedPost(input: { postUrl: string; userId: string }) 
   const detectedPost = await insertDetectedPostIfNew(blog.id, rssPost);
 
   if (!detectedPost) {
+    const retryPost = await getRetryableDetectedPost(rssPost.link);
+
+    if (retryPost) {
+      await processDetectedPost(retryPost, rssPost);
+
+      return {
+        postUrl: postParts.normalizedUrl,
+        status: "SUCCESS",
+        retried: true,
+      };
+    }
+
     return {
       postUrl: postParts.normalizedUrl,
       status: "ALREADY_PROCESSED",
@@ -321,6 +333,21 @@ async function insertDetectedPostIfNew(
   }
 
   throw new Error(`Failed to insert detected post: ${error.message}`);
+}
+
+async function getRetryableDetectedPost(postUrl: string): Promise<DetectedPost | null> {
+  const { data, error } = await getSupabase()
+    .from("detected_posts")
+    .select("id, post_url, post_title")
+    .eq("post_url", postUrl)
+    .eq("backlink_inserted", false)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Failed to load retryable detected post: ${error.message}`);
+  }
+
+  return data;
 }
 
 function extractCleanTextFromHtml(html: string): string {
