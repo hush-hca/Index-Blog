@@ -24,11 +24,8 @@ export default async function DashboardLayout({
             Naver Post Dashboard
           </Link>
           <nav className="flex items-center gap-4 text-sm">
-            <Link className="text-slate-600 hover:text-slate-950" href="/dashboard">
-              Activity
-            </Link>
             <Link className="text-slate-600 hover:text-slate-950" href="/dashboard/register">
-              Submit Post
+              Submit Naver Blog Post
             </Link>
           </nav>
         </div>
