@@ -10,7 +10,7 @@ export function extractNaverPost(input: string): NaverPostParts {
   try {
     const url = new URL(cleaned);
 
-    if (url.hostname !== "blog.naver.com") {
+    if (url.hostname !== "blog.naver.com" && url.hostname !== "m.blog.naver.com") {
       throw new Error("Invalid Naver Blog URL");
     }
 
@@ -25,7 +25,7 @@ export function extractNaverPost(input: string): NaverPostParts {
     return {
       blogId,
       logNo,
-      normalizedUrl: `https://blog.naver.com/${blogId}/${logNo}`,
+      normalizedUrl: `https://m.blog.naver.com/${blogId}/${logNo}`,
     };
   } catch {
     throw new Error("Enter a valid Naver Blog post URL, e.g. https://blog.naver.com/exampleid/1234567890");

@@ -141,13 +141,18 @@ async function processSubmittedPost(input: { postUrl: string; userId: string }) 
     throw new Error("Submitted post was not found in the Naver Blog RSS feed");
   }
 
-  const detectedPost = await insertDetectedPostIfNew(blog.id, rssPost);
+  const normalizedRssPost = {
+    ...rssPost,
+    link: postParts.normalizedUrl,
+  };
+
+  const detectedPost = await insertDetectedPostIfNew(blog.id, normalizedRssPost);
 
   if (!detectedPost) {
-    const retryPost = await getRetryableDetectedPost(rssPost.link);
+    const retryPost = await getRetryableDetectedPost(normalizedRssPost.link);
 
     if (retryPost) {
-      await processDetectedPost(retryPost, rssPost);
+      await processDetectedPost(retryPost, normalizedRssPost);
 
       return {
         postUrl: postParts.normalizedUrl,
@@ -162,7 +167,7 @@ async function processSubmittedPost(input: { postUrl: string; userId: string }) 
     };
   }
 
-  await processDetectedPost(detectedPost, rssPost);
+  await processDetectedPost(detectedPost, normalizedRssPost);
 
   return {
     postUrl: postParts.normalizedUrl,
@@ -270,7 +275,7 @@ async function findOrCreateRegisteredBlog(input: {
     .from("registered_blogs")
     .insert({
       user_id: input.userId,
-      blog_url: `https://blog.naver.com/${input.blogId}`,
+      blog_url: `https://m.blog.naver.com/${input.blogId}`,
       blog_id: input.blogId,
     })
     .select("id, blog_url, blog_id")
@@ -400,7 +405,7 @@ function extractNaverPostParts(input: string): NaverPostParts {
   try {
     const url = new URL(cleaned);
 
-    if (url.hostname !== "blog.naver.com") {
+    if (url.hostname !== "blog.naver.com" && url.hostname !== "m.blog.naver.com") {
       throw new Error("Invalid Naver Blog URL");
     }
 
@@ -415,7 +420,7 @@ function extractNaverPostParts(input: string): NaverPostParts {
     return {
       blogId,
       logNo,
-      normalizedUrl: `https://blog.naver.com/${blogId}/${logNo}`,
+      normalizedUrl: `https://m.blog.naver.com/${blogId}/${logNo}`,
     };
   } catch {
     throw new Error("Invalid Naver Blog post URL");
