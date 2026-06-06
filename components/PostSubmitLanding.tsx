@@ -50,8 +50,8 @@ export function PostSubmitLanding({
     <main className="min-h-screen bg-slate-50 text-slate-950">
       <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4">
-          <Link href="/" className="text-base font-semibold text-slate-950">
-            LinkEasy
+          <Link href="/" className="block h-10 w-40" aria-label="LinkEasy home">
+            <img src="/linkeasy-logo.svg" alt="LinkEasy" className="h-full w-full object-contain" />
           </Link>
           <nav className="flex items-center gap-4 text-sm">
             <Link className="text-slate-600 hover:text-slate-950" href="/dashboard/register">
@@ -110,7 +110,7 @@ export function PostSubmitLanding({
         <div className="mx-auto grid max-w-6xl gap-10 px-4 py-16 lg:grid-cols-[1fr_460px] lg:items-center">
           <div>
             <p className="text-sm font-semibold text-emerald-700">네이버 블로그 구글 색인 등록</p>
-            <h2 className="mt-3 text-3xl font-semibold leading-tight text-slate-950 sm:text-5xl">
+            <h2 className="mt-3 text-3xl font-semibold leading-snug text-slate-950 sm:text-5xl">
               열심히 쓴 네이버 블로그 글, 구글 검색창에 주소를 쳐도 안 나오시나요?
             </h2>
             <p className="mt-5 text-lg leading-8 text-slate-600">
