@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Naver Post Dashboard",
-  description: "Submit Naver Blog posts and monitor processing activity.",
+  title: "LinkEasy",
+  description: "네이버 블로그 글의 구글 색인 신호를 간편하게 등록합니다.",
 };
 
 export default function RootLayout({
@@ -12,7 +12,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="ko">
       <body>{children}</body>
     </html>
   );

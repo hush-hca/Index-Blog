@@ -8,6 +8,7 @@ type SubmitPostResult = {
   ok: boolean;
   requiresAuth?: boolean;
   error?: string;
+  message?: string;
 };
 
 export async function submitNaverPost(formData: FormData): Promise<SubmitPostResult> {
@@ -53,5 +54,5 @@ export async function submitNaverPost(formData: FormData): Promise<SubmitPostRes
   }
 
   revalidatePath("/dashboard");
-  return { ok: true };
+  return { ok: true, message: "Post submitted successfully." };
 }
