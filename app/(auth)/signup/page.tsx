@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { signup } from "./actions";
+import { loginWithGoogle } from "../actions";
 
 export default async function SignupPage({
   searchParams,
@@ -12,7 +13,18 @@ export default async function SignupPage({
     <main className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
       <div className="w-full max-w-sm rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
         <h1 className="text-xl font-semibold text-slate-950">Create account</h1>
-        <form action={signup} className="mt-6 space-y-4">
+        <form action={loginWithGoogle} className="mt-6">
+          <button className="flex w-full items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
+            <span className="text-base font-semibold text-slate-950">G</span>
+            Continue with Google
+          </button>
+        </form>
+        <div className="my-5 flex items-center gap-3">
+          <div className="h-px flex-1 bg-slate-200" />
+          <span className="text-xs text-slate-500">or</span>
+          <div className="h-px flex-1 bg-slate-200" />
+        </div>
+        <form action={signup} className="space-y-4">
           <label className="block">
             <span className="text-sm font-medium text-slate-700">Email</span>
             <input

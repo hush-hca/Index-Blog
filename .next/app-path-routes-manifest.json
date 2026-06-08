@@ -1,8 +1,9 @@
 {
+  "/auth/callback/route": "/auth/callback",
   "/_not-found/page": "/_not-found",
-  "/(auth)/login/page": "/login",
-  "/page": "/",
   "/(auth)/signup/page": "/signup",
+  "/page": "/",
+  "/(auth)/login/page": "/login",
   "/dashboard/register/page": "/dashboard/register",
   "/dashboard/page": "/dashboard"
 }

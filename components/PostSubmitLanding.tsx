@@ -110,7 +110,7 @@ export function PostSubmitLanding({
         <div className="mx-auto grid max-w-6xl gap-10 px-4 py-16 lg:grid-cols-[1fr_460px] lg:items-center">
           <div>
             <p className="text-sm font-semibold text-emerald-700">네이버 블로그 구글 색인 등록</p>
-            <h2 className="mt-3 text-3xl font-semibold leading-snug text-slate-950 sm:text-5xl">
+            <h2 className="mt-3 text-3xl font-semibold text-slate-950 sm:text-5xl" style={{ lineHeight: 1.35 }}>
               열심히 쓴 네이버 블로그 글, 구글 검색창에 주소를 쳐도 안 나오시나요?
             </h2>
             <p className="mt-5 text-lg leading-8 text-slate-600">
