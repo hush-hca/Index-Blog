@@ -51,9 +51,12 @@ export function PostSubmitLanding({
       <header className="sticky top-0 z-40 border-b border-slate-200 bg-white/95 backdrop-blur">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4">
           <Link href="/" className="block h-10 w-40" aria-label="LinkEasy home">
-            <img src="/linkeasy-logo.svg" alt="LinkEasy" className="h-full w-full object-contain" />
+            <img src="/linkeasy-logo.png" alt="LinkEasy" className="h-full w-full object-contain" />
           </Link>
           <nav className="flex items-center gap-4 text-sm">
+            <Link className="text-slate-600 hover:text-slate-950" href="/blog">
+              블로그
+            </Link>
             <Link className="text-slate-600 hover:text-slate-950" href="/dashboard/register">
               등록하기
             </Link>

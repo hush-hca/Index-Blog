@@ -7,16 +7,16 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 export async function loginWithGoogle() {
   const supabase = await createSupabaseServerClient();
   const headerStore = await headers();
-  const origin = headerStore.get("origin") ?? process.env.NEXT_PUBLIC_SITE_URL;
+  const siteUrl = getSiteUrl(headerStore);
 
-  if (!origin) {
+  if (!siteUrl) {
     redirect("/login?error=Missing%20site%20origin");
   }
 
   const { data, error } = await supabase.auth.signInWithOAuth({
     provider: "google",
     options: {
-      redirectTo: `${origin}/auth/callback?next=/`,
+      redirectTo: `${siteUrl}/auth/callback`,
     },
   });
 
@@ -25,4 +25,21 @@ export async function loginWithGoogle() {
   }
 
   redirect(data.url);
+}
+
+function getSiteUrl(headerStore: Headers) {
+  const configuredUrl = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/+$/, "");
+
+  if (configuredUrl) {
+    return configuredUrl;
+  }
+
+  const host = headerStore.get("x-forwarded-host") ?? headerStore.get("host");
+  const protocol = headerStore.get("x-forwarded-proto") ?? "https";
+
+  if (host) {
+    return `${protocol}://${host}`;
+  }
+
+  return headerStore.get("origin")?.replace(/\/+$/, "") ?? null;
 }
