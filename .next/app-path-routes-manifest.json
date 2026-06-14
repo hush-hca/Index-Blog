@@ -1,11 +1,11 @@
 {
-  "/_not-found/page": "/_not-found",
   "/auth/callback/route": "/auth/callback",
-  "/(auth)/login/page": "/login",
+  "/_not-found/page": "/_not-found",
   "/(auth)/signup/page": "/signup",
+  "/(auth)/login/page": "/login",
   "/page": "/",
-  "/blog/page": "/blog",
+  "/dashboard/register/page": "/dashboard/register",
   "/blog/[slug]/page": "/blog/[slug]",
   "/dashboard/page": "/dashboard",
-  "/dashboard/register/page": "/dashboard/register"
+  "/blog/page": "/blog"
 }
