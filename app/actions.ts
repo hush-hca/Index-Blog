@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { extractNaverPost } from "@/lib/naver/extractNaverPost";
 
@@ -55,4 +56,12 @@ export async function submitNaverPost(formData: FormData): Promise<SubmitPostRes
 
   revalidatePath("/dashboard");
   return { ok: true, message: "Post submitted successfully." };
+}
+
+export async function logout() {
+  const supabase = await createSupabaseServerClient();
+  await supabase.auth.signOut();
+
+  revalidatePath("/");
+  redirect("/");
 }

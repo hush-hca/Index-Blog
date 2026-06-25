@@ -1,6 +1,6 @@
+import type { Metadata } from "next";
 import { PostSubmitLanding } from "@/components/PostSubmitLanding";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title: "네이버 블로그 구글 노출 자동 등록",

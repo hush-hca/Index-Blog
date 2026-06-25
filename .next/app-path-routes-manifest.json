@@ -1,13 +1,13 @@
 {
-  "/_not-found/page": "/_not-found",
   "/auth/callback/route": "/auth/callback",
+  "/_not-found/page": "/_not-found",
   "/robots.txt/route": "/robots.txt",
   "/sitemap.xml/route": "/sitemap.xml",
+  "/blog/page": "/blog",
   "/(auth)/signup/page": "/signup",
   "/blog/[slug]/page": "/blog/[slug]",
-  "/blog/page": "/blog",
-  "/page": "/",
   "/(auth)/login/page": "/login",
+  "/page": "/",
   "/dashboard/register/page": "/dashboard/register",
   "/dashboard/page": "/dashboard"
 }
