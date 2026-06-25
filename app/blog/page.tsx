@@ -3,8 +3,11 @@ import type { Metadata } from "next";
 import { blogPosts } from "@/lib/blog/posts";
 
 export const metadata: Metadata = {
-  title: "Linkizy 블로그",
-  description: "네이버 블로그 구글 노출, 색인 확인, 블로그 SEO에 대한 Linkizy 가이드입니다.",
+  title: "블로그",
+  description: "네이버 블로그 구글 노출, 네이버 블로그 구글 색인, 블로그 SEO에 대한 Linkizy 가이드입니다.",
+  alternates: {
+    canonical: "/blog",
+  },
 };
 
 export default function BlogIndexPage() {

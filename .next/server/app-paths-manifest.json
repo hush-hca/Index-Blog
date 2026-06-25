@@ -1,11 +1,13 @@
 {
-  "/auth/callback/route": "app/auth/callback/route.js",
   "/_not-found/page": "app/_not-found/page.js",
+  "/auth/callback/route": "app/auth/callback/route.js",
+  "/robots.txt/route": "app/robots.txt/route.js",
+  "/sitemap.xml/route": "app/sitemap.xml/route.js",
   "/(auth)/signup/page": "app/(auth)/signup/page.js",
-  "/(auth)/login/page": "app/(auth)/login/page.js",
-  "/page": "app/page.js",
-  "/dashboard/register/page": "app/dashboard/register/page.js",
   "/blog/[slug]/page": "app/blog/[slug]/page.js",
-  "/dashboard/page": "app/dashboard/page.js",
-  "/blog/page": "app/blog/page.js"
+  "/blog/page": "app/blog/page.js",
+  "/page": "app/page.js",
+  "/(auth)/login/page": "app/(auth)/login/page.js",
+  "/dashboard/register/page": "app/dashboard/register/page.js",
+  "/dashboard/page": "app/dashboard/page.js"
 }

@@ -1,6 +1,15 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { signup } from "./actions";
 import { loginWithGoogle } from "../actions";
+
+export const metadata: Metadata = {
+  title: "Sign up",
+  robots: {
+    index: false,
+    follow: false,
+  },
+};
 
 export default async function SignupPage({
   searchParams,

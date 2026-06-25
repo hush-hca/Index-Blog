@@ -24,9 +24,12 @@ export async function generateMetadata({ params }: BlogPostPageProps): Promise<M
   }
 
   return {
-    title: `${post.title} | Linkizy`,
+    title: post.title,
     description: post.description,
     keywords: post.keywords,
+    alternates: {
+      canonical: `/blog/${post.slug}`,
+    },
   };
 }
 
@@ -74,7 +77,7 @@ export default async function BlogPostPage({ params }: BlogPostPageProps) {
         <div className="mt-8 rounded-lg border border-slate-200 bg-white p-6">
           <h2 className="text-xl font-semibold text-slate-950">Linkizy로 네이버 블로그 글 등록하기</h2>
           <p className="mt-3 text-sm leading-6 text-slate-600">
-            구글 노출을 원하는 네이버 블로그 글 주소를 입력하면 모바일 주소 기준으로 접수됩니다.
+            구글 노출을 원하는 네이버 블로그 글 주소를 입력하면 모바일 주소 기준으로 접수합니다.
           </p>
           <Link
             href="/"
